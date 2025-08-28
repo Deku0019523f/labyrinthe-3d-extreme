@@ -13,8 +13,8 @@
       color: #fff;
       font-family: Arial, sans-serif;
     }
-    /* Overlay used before pointer lock is engaged */
-    #overlay {
+    /* Overlay used for login, level and score screens */
+    .overlay {
       position: absolute;
       top: 0;
       left: 0;
@@ -25,26 +25,41 @@
       justify-content: center;
       flex-direction: column;
       background: rgba(0, 0, 0, 0.8);
-      z-index: 1;
+      z-index: 3;
       text-align: center;
+      color: #fff;
     }
-    #overlay img {
-      max-width: 80%;
-      height: auto;
-      margin-bottom: 1rem;
-      border-radius: 8px;
-    }
-    #overlay button {
+    .overlay button {
       padding: 0.5rem 1.5rem;
-      font-size: 1.25rem;
+      font-size: 1.1rem;
       cursor: pointer;
       border: none;
       border-radius: 4px;
       background: #5a9e30;
       color: white;
+      margin-top: 1rem;
     }
-    #overlay button:hover {
+    .overlay button:hover {
       background: #4a8b29;
+    }
+    /* Avatar selection styling */
+    #avatarSelection {
+      display: flex;
+      justify-content: center;
+      margin-top: 0.5rem;
+      margin-bottom: 0.5rem;
+      gap: 1rem;
+    }
+    .avatar-option {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+    }
+    .avatar-option.selected {
+      border-color: #ffffff;
+      box-shadow: 0 0 5px #fff;
     }
     /* Status message in the top left corner */
     #status {
@@ -60,27 +75,42 @@
   </style>
 </head>
 <body>
-  <!-- Overlay with title, image and start button -->
-  <div id="overlay">
-    <h1>Bienvenue dans le labyrinthe 3D !</h1>
-    <p>Utilisez les touches WASD ou les flèches pour vous déplacer.<br />Cliquez sur le bouton pour commencer.</p>
-    <button id="startButton">Commencer</button>
+  <!-- Login overlay for session and avatar selection -->
+  <div id="loginOverlay" class="overlay">
+    <h1>Connexion</h1>
+    <p>Entrez votre code session :</p>
+    <input id="sessionCode" type="text" placeholder="Deku225_sessionID" />
+    <p>Choisissez votre avatar :</p>
+    <div id="avatarSelection">
+      <div class="avatar-option" data-color="#e74c3c" style="background-color:#e74c3c;"></div>
+      <div class="avatar-option" data-color="#3498db" style="background-color:#3498db;"></div>
+      <div class="avatar-option" data-color="#f1c40f" style="background-color:#f1c40f;"></div>
+    </div>
+    <button id="loginButton">Se connecter</button>
   </div>
-  <!-- Status display (e.g. victory message) -->
+  <!-- Level overlay displayed between levels -->
+  <div id="levelOverlay" class="overlay" style="display:none;">
+    <h1 id="levelTitle"></h1>
+    <p id="levelMessage"></p>
+    <button id="startLevelButton">Commencer</button>
+  </div>
+  <!-- Scoreboard overlay shown after each level -->
+  <div id="scoreOverlay" class="overlay" style="display:none;">
+    <h1 id="scoreTitle"></h1>
+    <div id="scoreContent"></div>
+    <button id="nextLevelButton">Niveau suivant</button>
+  </div>
+  <!-- Container for status messages (e.g. victory) -->
   <div id="status"></div>
-  <!-- Main script: generates the maze and handles the 3D scene -->
+  <!-- Main script: generates the maze, handles levels and leaderboard -->
   <script type="module">
-    // Import Three.js from CDN. Modules are used to simplify bundling and allow
-    // direct ES module imports. We avoid PointerLockControls to improve
-    // compatibility on GitHub Pages, using keyboard‑only rotation instead.
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js';
 
-    /**
-     * Generate a maze using randomized depth‑first search. The maze array
-     * contains 0 for open passages and 1 for walls. Start and end cells are
-     * cleared explicitly. Cells are processed in steps of two to maintain
-     * single‑cell wide corridors.
-     */
+    // ------------------------ Utility and state -----------------------------
+    // Generate a maze using randomized depth‑first search. The maze array
+    // contains 0 for open passages and 1 for walls. Start and end cells are
+    // cleared explicitly. Cells are processed in steps of two to maintain
+    // single‑cell wide corridors.
     function generateMaze(width, height) {
       const maze = Array.from({ length: height }, () => Array(width).fill(1));
       const stack = [];
@@ -113,176 +143,324 @@
       return maze;
     }
 
-    // Maze parameters
-    const mazeWidth = 15;
-    const mazeHeight = 15;
-    const cellSize = 4;
-    const wallHeight = 3;
-    const maze = generateMaze(mazeWidth, mazeHeight);
+    // Storage helpers for persistent scoreboard
+    function loadScoreboard() {
+      try {
+        return JSON.parse(localStorage.getItem('labyrinthScoreboard') || '{}');
+      } catch (_) {
+        return {};
+      }
+    }
+    function saveScoreboard(board) {
+      localStorage.setItem('labyrinthScoreboard', JSON.stringify(board));
+    }
+    function recordTime(level, code, time) {
+      const board = loadScoreboard();
+      if (!board[level]) board[level] = [];
+      board[level].push({ code, time });
+      // sort ascending times
+      board[level].sort((a, b) => a.time - b.time);
+      saveScoreboard(board);
+    }
+    function getRankings(level) {
+      const board = loadScoreboard();
+      return board[level] || [];
+    }
 
-    // Scene setup
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x111111);
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    const renderer = new THREE.WebGLRenderer();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    document.body.appendChild(renderer.domElement);
+    // Game state variables
+    let currentLevel = 1;
+    const totalLevels = 20;
+    let currentCode = '';
+    let avatarColor = '#e74c3c';
+    let startTime = 0;
+    let scene, camera, renderer, exit, maze, mazeWidth, mazeHeight, cellSize, wallHeight;
+    let move, yaw, velocity, speed, rotateSpeed, animationId;
 
-    // Lighting
-    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
-    dirLight.position.set(10, 20, 10);
-    scene.add(dirLight);
+    // UI elements
+    const loginOverlay = document.getElementById('loginOverlay');
+    const levelOverlay = document.getElementById('levelOverlay');
+    const scoreOverlay = document.getElementById('scoreOverlay');
+    const sessionCodeInput = document.getElementById('sessionCode');
+    const avatarSelection = document.getElementById('avatarSelection');
+    const loginButton = document.getElementById('loginButton');
+    const levelTitle = document.getElementById('levelTitle');
+    const levelMessage = document.getElementById('levelMessage');
+    const startLevelButton = document.getElementById('startLevelButton');
+    const scoreTitle = document.getElementById('scoreTitle');
+    const scoreContent = document.getElementById('scoreContent');
+    const nextLevelButton = document.getElementById('nextLevelButton');
+    const statusEl = document.getElementById('status');
 
-    // Floor
-    const floorGeometry = new THREE.PlaneGeometry(mazeWidth * cellSize, mazeHeight * cellSize);
-    const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
-    const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-    floor.rotation.x = -Math.PI / 2;
-    scene.add(floor);
+    // Avatar selection logic: highlight selected
+    avatarSelection.addEventListener('click', (e) => {
+      const target = e.target.closest('.avatar-option');
+      if (target) {
+        // remove selected class
+        avatarSelection.querySelectorAll('.avatar-option').forEach(opt => opt.classList.remove('selected'));
+        target.classList.add('selected');
+        avatarColor = target.getAttribute('data-color');
+      }
+    });
+    // default select first avatar
+    avatarSelection.querySelector('.avatar-option').classList.add('selected');
 
-    // Walls
-    const wallGeometry = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
-    const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x3a5d0f });
-    for (let z = 0; z < mazeHeight; z++) {
-      for (let x = 0; x < mazeWidth; x++) {
-        if (maze[z][x] === 1) {
-          const wall = new THREE.Mesh(wallGeometry, wallMaterial);
-          wall.position.set(
-            (x - mazeWidth / 2) * cellSize + cellSize / 2,
-            wallHeight / 2,
-            (z - mazeHeight / 2) * cellSize + cellSize / 2
-          );
-          scene.add(wall);
+    loginButton.addEventListener('click', () => {
+      const code = sessionCodeInput.value.trim();
+      if (!code) {
+        alert('Veuillez entrer un code de session.');
+        return;
+      }
+      currentCode = code;
+      loginOverlay.style.display = 'none';
+      showLevelOverlay();
+    });
+
+    startLevelButton.addEventListener('click', () => {
+      levelOverlay.style.display = 'none';
+      startLevel();
+    });
+    nextLevelButton.addEventListener('click', () => {
+      scoreOverlay.style.display = 'none';
+      currentLevel++;
+      if (currentLevel <= totalLevels) {
+        showLevelOverlay();
+      } else {
+        // game completed
+        displayFinalScoreboard();
+      }
+    });
+
+    function showLevelOverlay() {
+      levelTitle.textContent = `Niveau ${currentLevel}`;
+      if (currentLevel === 1) {
+        levelMessage.textContent = 'Terminez chaque labyrinthe le plus rapidement possible.';
+      } else {
+        levelMessage.textContent = `Préparez-vous pour le niveau ${currentLevel}!`;
+      }
+      levelOverlay.style.display = 'flex';
+    }
+
+    // Determine maze size based on level (increasing difficulty)
+    function getDimensions(level) {
+      const base = 11; // base dimension
+      const increment = Math.floor((level - 1) / 2); // increase every 2 levels
+      return base + increment * 2; // keep odd numbers for proper walls
+    }
+
+    function initRenderer() {
+      // Create renderer only once
+      if (!renderer) {
+        renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+      } else {
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+    }
+
+    // Set up a new level: create maze, scene, camera, controls
+    function startLevel() {
+      // Cancel any existing animation
+      if (animationId) cancelAnimationFrame(animationId);
+      // Initialize Three.js objects
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x111111);
+      // Determine maze dimensions
+      mazeWidth = getDimensions(currentLevel);
+      mazeHeight = getDimensions(currentLevel);
+      cellSize = 4;
+      wallHeight = 3;
+      maze = generateMaze(mazeWidth, mazeHeight);
+      // Create camera
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+      // Initialize renderer if needed
+      initRenderer();
+      // Remove previous canvas from body? Not necessary since we reuse renderer
+      // Lighting
+      scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
+      dirLight.position.set(10, 20, 10);
+      scene.add(dirLight);
+      // Floor
+      const floorGeometry = new THREE.PlaneGeometry(mazeWidth * cellSize, mazeHeight * cellSize);
+      const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+      const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+      floor.rotation.x = -Math.PI / 2;
+      scene.add(floor);
+      // Walls
+      const wallGeometry = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
+      const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x3a5d0f });
+      for (let z = 0; z < mazeHeight; z++) {
+        for (let x = 0; x < mazeWidth; x++) {
+          if (maze[z][x] === 1) {
+            const wall = new THREE.Mesh(wallGeometry, wallMaterial);
+            wall.position.set(
+              (x - mazeWidth / 2) * cellSize + cellSize / 2,
+              wallHeight / 2,
+              (z - mazeHeight / 2) * cellSize + cellSize / 2
+            );
+            scene.add(wall);
+          }
         }
       }
+      // Exit indicator
+      const exitGeometry = new THREE.BoxGeometry(cellSize, 0.1, cellSize);
+      const exitMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+      exit = new THREE.Mesh(exitGeometry, exitMaterial);
+      exit.position.set(
+        (mazeWidth - 2 - mazeWidth / 2) * cellSize + cellSize / 2,
+        0.05,
+        (mazeHeight - 2 - mazeHeight / 2) * cellSize + cellSize / 2
+      );
+      scene.add(exit);
+      // Position camera at the start
+      camera.position.set(
+        (1 - mazeWidth / 2) * cellSize + cellSize / 2,
+        1.0,
+        (1 - mazeHeight / 2) * cellSize + cellSize / 2
+      );
+      yaw = 0;
+      // Movement controls
+      move = { forward: false, backward: false, rotLeft: false, rotRight: false };
+      velocity = new THREE.Vector3();
+      speed = 5.0 + currentLevel * 0.1; // slightly increase speed per level
+      rotateSpeed = 2.5;
+      // Key handlers
+      const onKeyDown = (event) => {
+        switch (event.code) {
+          case 'ArrowUp':
+          case 'KeyW':
+            move.forward = true;
+            break;
+          case 'ArrowDown':
+          case 'KeyS':
+            move.backward = true;
+            break;
+          case 'ArrowLeft':
+          case 'KeyA':
+            move.rotLeft = true;
+            break;
+          case 'ArrowRight':
+          case 'KeyD':
+            move.rotRight = true;
+            break;
+        }
+      };
+      const onKeyUp = (event) => {
+        switch (event.code) {
+          case 'ArrowUp':
+          case 'KeyW':
+            move.forward = false;
+            break;
+          case 'ArrowDown':
+          case 'KeyS':
+            move.backward = false;
+            break;
+          case 'ArrowLeft':
+          case 'KeyA':
+            move.rotLeft = false;
+            break;
+          case 'ArrowRight':
+          case 'KeyD':
+            move.rotRight = false;
+            break;
+        }
+      };
+      document.addEventListener('keydown', onKeyDown);
+      document.addEventListener('keyup', onKeyUp);
+      // Clear status
+      statusEl.textContent = '';
+      // Record start time
+      startTime = performance.now();
+      // Animation loop
+      function animate() {
+        animationId = requestAnimationFrame(animate);
+        const time = performance.now();
+        const delta = (time - startTime) / 1000;
+        const dt = (time - (animate.prevTime || time)) / 1000;
+        animate.prevTime = time;
+        // Rotation
+        if (move.rotLeft) yaw += rotateSpeed * dt;
+        if (move.rotRight) yaw -= rotateSpeed * dt;
+        camera.rotation.y = yaw;
+        // Reset velocity and apply movement
+        velocity.set(0, 0, 0);
+        if (move.forward) {
+          velocity.x -= Math.sin(yaw) * speed;
+          velocity.z -= Math.cos(yaw) * speed;
+        }
+        if (move.backward) {
+          velocity.x += Math.sin(yaw) * speed;
+          velocity.z += Math.cos(yaw) * speed;
+        }
+        // Proposed next position
+        const nextX = camera.position.x + velocity.x * dt;
+        const nextZ = camera.position.z + velocity.z * dt;
+        // Collision detection
+        const px = (nextX + (mazeWidth * cellSize) / 2) / cellSize;
+        const pz = (nextZ + (mazeHeight * cellSize) / 2) / cellSize;
+        const cellX = Math.floor(px);
+        const cellZ = Math.floor(pz);
+        if (
+          cellX >= 0 && cellX < mazeWidth && cellZ >= 0 && cellZ < mazeHeight &&
+          maze[cellZ][cellX] === 0
+        ) {
+          camera.position.x = nextX;
+          camera.position.z = nextZ;
+        }
+        // Victory check
+        if (
+          Math.abs(camera.position.x - exit.position.x) < cellSize * 0.5 &&
+          Math.abs(camera.position.z - exit.position.z) < cellSize * 0.5
+        ) {
+          // Level completed
+          const elapsed = (time - startTime) / 1000;
+          endLevel(elapsed);
+          return;
+        }
+        renderer.render(scene, camera);
+      }
+      animate();
     }
 
-    // Exit indicator
-    const exitGeometry = new THREE.BoxGeometry(cellSize, 0.1, cellSize);
-    const exitMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-    const exit = new THREE.Mesh(exitGeometry, exitMaterial);
-    exit.position.set(
-      (mazeWidth - 2 - mazeWidth / 2) * cellSize + cellSize / 2,
-      0.05,
-      (mazeHeight - 2 - mazeHeight / 2) * cellSize + cellSize / 2
-    );
-    scene.add(exit);
-
-    // Position camera at start
-    camera.position.set(
-      (1 - mazeWidth / 2) * cellSize + cellSize / 2,
-      1.0,
-      (1 - mazeHeight / 2) * cellSize + cellSize / 2
-    );
-    // Orientation angles
-    let yaw = 0;
-
-    // Hide overlay on start button click
-    const overlay = document.getElementById('overlay');
-    document.getElementById('startButton').addEventListener('click', () => {
-      overlay.style.display = 'none';
-    });
-
-    // Movement flags and parameters. We include rotation flags for left/right.
-    const move = {
-      forward: false,
-      backward: false,
-      rotLeft: false,
-      rotRight: false
-    };
-    const velocity = new THREE.Vector3();
-    const speed = 5.0;
-    const rotateSpeed = 2.5; // radians per second
-
-    document.addEventListener('keydown', (event) => {
-      switch (event.code) {
-        case 'ArrowUp':
-        case 'KeyW':
-          move.forward = true;
-          break;
-        case 'ArrowDown':
-        case 'KeyS':
-          move.backward = true;
-          break;
-        case 'ArrowLeft':
-        case 'KeyA':
-          move.rotLeft = true;
-          break;
-        case 'ArrowRight':
-        case 'KeyD':
-          move.rotRight = true;
-          break;
-      }
-    });
-    document.addEventListener('keyup', (event) => {
-      switch (event.code) {
-        case 'ArrowUp':
-        case 'KeyW':
-          move.forward = false;
-          break;
-        case 'ArrowDown':
-        case 'KeyS':
-          move.backward = false;
-          break;
-        case 'ArrowLeft':
-        case 'KeyA':
-          move.rotLeft = false;
-          break;
-        case 'ArrowRight':
-        case 'KeyD':
-          move.rotRight = false;
-          break;
-      }
-    });
-
-    const status = document.getElementById('status');
-    let prevTime = performance.now();
-
-    function animate() {
-      requestAnimationFrame(animate);
-      const time = performance.now();
-      const delta = (time - prevTime) / 1000;
-      // Rotation
-      if (move.rotLeft) yaw += rotateSpeed * delta;
-      if (move.rotRight) yaw -= rotateSpeed * delta;
-      camera.rotation.y = yaw;
-      // Reset velocity and apply movement based on forward/backward flags
-      velocity.set(0, 0, 0);
-      if (move.forward) {
-        velocity.x -= Math.sin(yaw) * speed;
-        velocity.z -= Math.cos(yaw) * speed;
-      }
-      if (move.backward) {
-        velocity.x += Math.sin(yaw) * speed;
-        velocity.z += Math.cos(yaw) * speed;
-      }
-      // Apply delta time
-      const nextX = camera.position.x + velocity.x * delta;
-      const nextZ = camera.position.z + velocity.z * delta;
-      // Collision detection on the new position
-      const px = (nextX + (mazeWidth * cellSize) / 2) / cellSize;
-      const pz = (nextZ + (mazeHeight * cellSize) / 2) / cellSize;
-      const cellX = Math.floor(px);
-      const cellZ = Math.floor(pz);
-      if (
-        cellX >= 0 && cellX < mazeWidth && cellZ >= 0 && cellZ < mazeHeight &&
-        maze[cellZ][cellX] === 0
-      ) {
-        camera.position.x = nextX;
-        camera.position.z = nextZ;
-      }
-      // Victory check
-      if (
-        Math.abs(camera.position.x - exit.position.x) < cellSize * 0.5 &&
-        Math.abs(camera.position.z - exit.position.z) < cellSize * 0.5
-      ) {
-        status.textContent = 'Bravo ! Vous avez terminé le labyrinthe.';
-      }
-      renderer.render(scene, camera);
-      prevTime = time;
+    // End the level: record time and show scoreboard
+    function endLevel(seconds) {
+      // Stop animation
+      if (animationId) cancelAnimationFrame(animationId);
+      // Record time in scoreboard
+      recordTime(currentLevel, currentCode, seconds);
+      // Build scoreboard content
+      const rankings = getRankings(currentLevel);
+      let html = `<p>Votre temps : ${seconds.toFixed(2)} s</p>`;
+      html += '<ol>';
+      rankings.slice(0, 5).forEach((entry, idx) => {
+        const pos = idx + 1;
+        html += `<li>${pos}. ${entry.code} – ${entry.time.toFixed(2)} s</li>`;
+      });
+      html += '</ol>';
+      scoreTitle.textContent = `Classement – Niveau ${currentLevel}`;
+      scoreContent.innerHTML = html;
+      // If last level, change button text
+      nextLevelButton.textContent = currentLevel < totalLevels ? 'Niveau suivant' : 'Voir le classement final';
+      scoreOverlay.style.display = 'flex';
     }
-    animate();
+
+    // Display final scoreboard across all levels for this user
+    function displayFinalScoreboard() {
+      const board = loadScoreboard();
+      let html = '';
+      for (let lvl = 1; lvl <= totalLevels; lvl++) {
+        const times = board[lvl] || [];
+        const entry = times.find(e => e.code === currentCode);
+        if (entry) {
+          html += `<p>Niveau ${lvl} : ${entry.time.toFixed(2)} s</p>`;
+        }
+      }
+      scoreTitle.textContent = 'Résumé de vos temps';
+      scoreContent.innerHTML = html;
+      nextLevelButton.style.display = 'none';
+      scoreOverlay.style.display = 'flex';
+    }
   </script>
 </body>
 </html>
