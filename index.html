@@ -70,25 +70,21 @@
   <div id="status"></div>
   <!-- Main script: generates the maze and handles the 3D scene -->
   <script type="module">
-    // Import Three.js core and PointerLockControls from CDN.  Module import is used so that
-    // we can leverage ES module syntax in the browser without bundling.
+    // Import Three.js from CDN. Modules are used to simplify bundling and allow
+    // direct ES module imports. We avoid PointerLockControls to improve
+    // compatibility on GitHub Pages, using keyboard‑only rotation instead.
     import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.150.1/build/three.module.js';
-    import { PointerLockControls } from 'https://cdn.jsdelivr.net/npm/three@0.150.1/examples/jsm/controls/PointerLockControls.js';
 
-    /*
-     * Maze generation using a randomized depth‑first search.  The maze is represented as a
-     * two‑dimensional array where 0 indicates a passage and 1 indicates a wall.  To
-     * construct passages, we carve through walls in steps of two cells, knocking down
-     * intermediate walls to create a single cell wide corridor.  The boundaries remain
-     * intact to avoid the player walking off the map.  Start and end points are
-     * explicitly cleared.
+    /**
+     * Generate a maze using randomized depth‑first search. The maze array
+     * contains 0 for open passages and 1 for walls. Start and end cells are
+     * cleared explicitly. Cells are processed in steps of two to maintain
+     * single‑cell wide corridors.
      */
     function generateMaze(width, height) {
       const maze = Array.from({ length: height }, () => Array(width).fill(1));
       const stack = [];
-      // relative moves of two cells in each cardinal direction
       const directions = [ [0, -2], [2, 0], [0, 2], [-2, 0] ];
-      // start at (1,1) to avoid carving on the outer border
       let cx = 1;
       let cy = 1;
       maze[cy][cx] = 0;
@@ -104,7 +100,6 @@
           }
         }
         if (neighbors.length) {
-          // choose a random neighbor and knock down the wall between current cell and neighbor
           const [nx, ny, dx, dy] = neighbors[Math.floor(Math.random() * neighbors.length)];
           maze[ny - dy / 2][nx - dx / 2] = 0;
           maze[ny][nx] = 0;
@@ -113,23 +108,19 @@
           stack.pop();
         }
       }
-      // clear the start and end cells to guarantee an entrance and exit
       maze[1][1] = 0;
       maze[height - 2][width - 2] = 0;
       return maze;
     }
 
-    // Maze dimensions and cell sizing.  A larger maze makes for a more challenging
-    // exploration.  Adjust cellSize to control the corridor width in the 3D scene.
+    // Maze parameters
     const mazeWidth = 15;
     const mazeHeight = 15;
     const cellSize = 4;
     const wallHeight = 3;
     const maze = generateMaze(mazeWidth, mazeHeight);
 
-    // Create a Three.js scene, camera, and renderer.  A dark background enhances
-    // contrast for the green walls and bright exit.  Lighting is kept simple with
-    // an ambient component for general illumination and a directional light for shading.
+    // Scene setup
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x111111);
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -138,22 +129,19 @@
     document.body.appendChild(renderer.domElement);
 
     // Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3);
-    scene.add(ambientLight);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.7);
     dirLight.position.set(10, 20, 10);
     scene.add(dirLight);
 
-    // Floor: a simple plane to walk on
+    // Floor
     const floorGeometry = new THREE.PlaneGeometry(mazeWidth * cellSize, mazeHeight * cellSize);
     const floorMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
     const floor = new THREE.Mesh(floorGeometry, floorMaterial);
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
 
-    // Walls: build boxes for every cell marked as 1 in the maze.  Position is offset so
-    // that the maze is centered around the origin.  The green colour echoes the
-    // labyrinth image provided by the user.
+    // Walls
     const wallGeometry = new THREE.BoxGeometry(cellSize, wallHeight, cellSize);
     const wallMaterial = new THREE.MeshLambertMaterial({ color: 0x3a5d0f });
     for (let z = 0; z < mazeHeight; z++) {
@@ -170,7 +158,7 @@
       }
     }
 
-    // Exit tile: a brightly coloured square on the ground indicates where to finish the maze
+    // Exit indicator
     const exitGeometry = new THREE.BoxGeometry(cellSize, 0.1, cellSize);
     const exitMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
     const exit = new THREE.Mesh(exitGeometry, exitMaterial);
@@ -181,39 +169,31 @@
     );
     scene.add(exit);
 
-    // PointerLockControls give the player a first‑person view and capture mouse movement.
-    const controls = new PointerLockControls(camera, renderer.domElement);
-    // Position the camera at the start cell (1,1) with a slight height so the player
-    // appears to be standing.  Coordinates are offset to center the maze on the origin.
+    // Position camera at start
     camera.position.set(
       (1 - mazeWidth / 2) * cellSize + cellSize / 2,
       1.0,
       (1 - mazeHeight / 2) * cellSize + cellSize / 2
     );
-    scene.add(controls.getObject());
+    // Orientation angles
+    let yaw = 0;
 
-    // Handle overlay and pointer lock.  When the player clicks the start button we
-    // request pointer lock; the overlay is hidden while locked and shown again when
-    // unlocked.
+    // Hide overlay on start button click
     const overlay = document.getElementById('overlay');
-    const startButton = document.getElementById('startButton');
-    startButton.addEventListener('click', () => {
-      controls.lock();
-    });
-    controls.addEventListener('lock', () => {
+    document.getElementById('startButton').addEventListener('click', () => {
       overlay.style.display = 'none';
     });
-    controls.addEventListener('unlock', () => {
-      overlay.style.display = '';
-    });
 
-    // Movement flags and parameters.  Key events toggle these flags; the velocity is
-    // dampened each frame to provide smoother acceleration and deceleration.  Speed
-    // controls how fast the player can travel through the maze.
-    const move = { forward: false, backward: false, left: false, right: false };
+    // Movement flags and parameters. We include rotation flags for left/right.
+    const move = {
+      forward: false,
+      backward: false,
+      rotLeft: false,
+      rotRight: false
+    };
     const velocity = new THREE.Vector3();
-    const direction = new THREE.Vector3();
     const speed = 5.0;
+    const rotateSpeed = 2.5; // radians per second
 
     document.addEventListener('keydown', (event) => {
       switch (event.code) {
@@ -221,17 +201,17 @@
         case 'KeyW':
           move.forward = true;
           break;
-        case 'ArrowLeft':
-        case 'KeyA':
-          move.left = true;
-          break;
         case 'ArrowDown':
         case 'KeyS':
           move.backward = true;
           break;
+        case 'ArrowLeft':
+        case 'KeyA':
+          move.rotLeft = true;
+          break;
         case 'ArrowRight':
         case 'KeyD':
-          move.right = true;
+          move.rotRight = true;
           break;
       }
     });
@@ -241,22 +221,21 @@
         case 'KeyW':
           move.forward = false;
           break;
-        case 'ArrowLeft':
-        case 'KeyA':
-          move.left = false;
-          break;
         case 'ArrowDown':
         case 'KeyS':
           move.backward = false;
           break;
+        case 'ArrowLeft':
+        case 'KeyA':
+          move.rotLeft = false;
+          break;
         case 'ArrowRight':
         case 'KeyD':
-          move.right = false;
+          move.rotRight = false;
           break;
       }
     });
 
-    // Status element for win notification
     const status = document.getElementById('status');
     let prevTime = performance.now();
 
@@ -264,41 +243,39 @@
       requestAnimationFrame(animate);
       const time = performance.now();
       const delta = (time - prevTime) / 1000;
-      // Apply friction to velocity
-      velocity.x -= velocity.x * 10.0 * delta;
-      velocity.z -= velocity.z * 10.0 * delta;
-      // Determine direction from movement flags
-      direction.z = Number(move.forward) - Number(move.backward);
-      direction.x = Number(move.right) - Number(move.left);
-      direction.normalize();
-      if (move.forward || move.backward) velocity.z -= direction.z * speed * delta;
-      if (move.left || move.right) velocity.x -= direction.x * speed * delta;
-      const controlObj = controls.getObject();
-      const prevPosition = controlObj.position.clone();
-      controlObj.translateX(velocity.x * delta);
-      controlObj.translateZ(velocity.z * delta);
-      // Collision detection: check the maze cell corresponding to the new position.
-      // Convert player coordinates to cell indices by translating and scaling.
-      const px = (controlObj.position.x + (mazeWidth * cellSize) / 2) / cellSize;
-      const pz = (controlObj.position.z + (mazeHeight * cellSize) / 2) / cellSize;
+      // Rotation
+      if (move.rotLeft) yaw += rotateSpeed * delta;
+      if (move.rotRight) yaw -= rotateSpeed * delta;
+      camera.rotation.y = yaw;
+      // Reset velocity and apply movement based on forward/backward flags
+      velocity.set(0, 0, 0);
+      if (move.forward) {
+        velocity.x -= Math.sin(yaw) * speed;
+        velocity.z -= Math.cos(yaw) * speed;
+      }
+      if (move.backward) {
+        velocity.x += Math.sin(yaw) * speed;
+        velocity.z += Math.cos(yaw) * speed;
+      }
+      // Apply delta time
+      const nextX = camera.position.x + velocity.x * delta;
+      const nextZ = camera.position.z + velocity.z * delta;
+      // Collision detection on the new position
+      const px = (nextX + (mazeWidth * cellSize) / 2) / cellSize;
+      const pz = (nextZ + (mazeHeight * cellSize) / 2) / cellSize;
       const cellX = Math.floor(px);
       const cellZ = Math.floor(pz);
       if (
-        cellX < 0 ||
-        cellX >= mazeWidth ||
-        cellZ < 0 ||
-        cellZ >= mazeHeight ||
-        maze[cellZ][cellX] === 1
+        cellX >= 0 && cellX < mazeWidth && cellZ >= 0 && cellZ < mazeHeight &&
+        maze[cellZ][cellX] === 0
       ) {
-        // Hit a wall: revert position and zero out velocity to prevent sliding
-        controlObj.position.copy(prevPosition);
-        velocity.x = 0;
-        velocity.z = 0;
+        camera.position.x = nextX;
+        camera.position.z = nextZ;
       }
-      // Victory condition: player is within half a cell of the exit
+      // Victory check
       if (
-        Math.abs(controlObj.position.x - exit.position.x) < cellSize * 0.5 &&
-        Math.abs(controlObj.position.z - exit.position.z) < cellSize * 0.5
+        Math.abs(camera.position.x - exit.position.x) < cellSize * 0.5 &&
+        Math.abs(camera.position.z - exit.position.z) < cellSize * 0.5
       ) {
         status.textContent = 'Bravo ! Vous avez terminé le labyrinthe.';
       }
