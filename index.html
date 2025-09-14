@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Quiz Bot Telegram</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Page de Login -->
+    <div id="login-page" class="login-container">
+        <div class="card login-card">
+            <div class="card-header text-center">
+                <h2><i class="fas fa-robot"></i> Quiz Bot Admin</h2>
+                <p class="text-muted">Connexion administrateur</p>
+            </div>
+            <div class="card-body">
+                <form id="login-form">
+                    <div class="mb-3">
+                        <label for="admin-id" class="form-label">ID Administrateur</label>
+                        <input type="text" class="form-control" id="admin-id" placeholder="Entrez votre ID Telegram" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-sign-in-alt"></i> Se connecter
+                    </button>
+                </form>
+                <div class="mt-3 text-center">
+                    <a href="#" id="public-page-link" class="text-decoration-none">
+                        <i class="fas fa-eye"></i> Voir la page publique
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Page Publique -->
+    <div id="public-page" class="public-container hidden">
+        <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+            <div class="container">
+                <a class="navbar-brand" href="#">
+                    <i class="fas fa-trophy"></i> Quiz Bot Leaderboard
+                </a>
+                <button id="back-to-login" class="btn btn-outline-light">
+                    <i class="fas fa-sign-in-alt"></i> Admin
+                </button>
+            </div>
+        </nav>
+        
+        <div class="container mt-4">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3><i class="fas fa-medal"></i> Top 20 Joueurs</h3>
+                        </div>
+                        <div class="card-body">
+                            <div id="public-leaderboard" class="table-responsive">
+                                <!-- Leaderboard will be populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h4><i class="fas fa-calendar-alt"></i> Prochains Concours</h4>
+                        </div>
+                        <div class="card-body">
+                            <div id="upcoming-contests">
+                                <!-- Contests will be populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h4><i class="fas fa-chart-bar"></i> Statistiques</h4>
+                        </div>
+                        <div class="card-body">
+                            <div class="stat-item">
+                                <span class="stat-label">Joueurs actifs :</span>
+                                <span class="stat-value text-primary" id="public-total-players">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Questions jouées :</span>
+                                <span class="stat-value text-success" id="public-total-questions">-</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-label">Taux de réussite :</span>
+                                <span class="stat-value text-warning" id="public-success-rate">-%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interface Admin -->
+    <div id="admin-interface" class="admin-container hidden">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h3><i class="fas fa-cog"></i> Admin Panel</h3>
+                <button class="theme-toggle" id="theme-toggle">
+                    <i class="fas fa-moon"></i>
+                </button>
+            </div>
+            <ul class="sidebar-menu">
+                <li><a href="#" data-page="dashboard" class="active"><i class="fas fa-tachometer-alt"></i> Tableau de bord</a></li>
+                <li><a href="#" data-page="quiz"><i class="fas fa-question-circle"></i> Gestion Quiz</a></li>
+                <li><a href="#" data-page="players"><i class="fas fa-users"></i> Joueurs</a></li>
+                <li><a href="#" data-page="contests"><i class="fas fa-trophy"></i> Concours</a></li>
+                <li><a href="#" data-page="stats"><i class="fas fa-chart-line"></i> Statistiques</a></li>
+                <li><a href="#" data-page="bot-simulator"><i class="fab fa-telegram"></i> Simulateur Bot</a></li>
+                <li class="separator"></li>
+                <li><a href="#" id="logout"><i class="fas fa-sign-out-alt"></i> Déconnexion</a></li>
+            </ul>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <div class="topbar">
+                <button class="sidebar-toggle" id="sidebar-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="topbar-right">
+                    <span class="admin-info">Admin ID: 1299831974</span>
+                </div>
+            </div>
+
+            <!-- Dashboard -->
+            <div id="dashboard-content" class="content-page active">
+                <div class="container-fluid">
+                    <div class="page-header">
+                        <h1><i class="fas fa-tachometer-alt"></i> Tableau de bord</h1>
+                        <p class="text-muted">Vue d'ensemble de votre bot Quiz Telegram</p>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card dashboard-card">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col">
+                                            <div class="stat-label">Total Joueurs</div>
+                                            <div class="stat-value text-primary" id="dash-total-players">-</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="fas fa-users fa-2x text-primary"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card dashboard-card">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col">
+                                            <div class="stat-label">Questions Totales</div>
+                                            <div class="stat-value text-success" id="dash-total-questions">-</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="fas fa-question-circle fa-2x text-success"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card dashboard-card">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col">
+                                            <div class="stat-label">Taux Réussite</div>
+                                            <div class="stat-value text-warning" id="dash-success-rate">-%</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="fas fa-chart-line fa-2x text-warning"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-3 col-md-6 mb-4">
+                            <div class="card dashboard-card">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col">
+                                            <div class="stat-label">Temps Moyen</div>
+                                            <div class="stat-value text-info" id="dash-avg-time">-s</div>
+                                        </div>
+                                        <div class="col-auto">
+                                            <i class="fas fa-clock fa-2x text-info"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Top 5 Joueurs</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="dashboard-leaderboard"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Actions Rapides</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-grid gap-2">
+                                        <button class="btn btn-primary" data-page="quiz">
+                                            <i class="fas fa-plus"></i> Ajouter un Quiz
+                                        </button>
+                                        <button class="btn btn-success" data-page="contests">
+                                            <i class="fas fa-trophy"></i> Programmer Concours
+                                        </button>
+                                        <button class="btn btn-info" data-page="bot-simulator">
+                                            <i class="fab fa-telegram"></i> Tester le Bot
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quiz Management -->
+            <div id="quiz-content" class="content-page">
+                <div class="container-fluid">
+                    <div class="page-header">
+                        <h1><i class="fas fa-question-circle"></i> Gestion des Quiz</h1>
+                        <button class="btn btn-primary" id="add-quiz-btn">
+                            <i class="fas fa-plus"></i> Ajouter un Quiz
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped" id="quiz-table">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Question</th>
+                                            <th>Sujet</th>
+                                            <th>Difficulté</th>
+                                            <th>Examen</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="quiz-list">
+                                        <!-- Quiz list will be populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Players Management -->
+            <div id="players-content" class="content-page">
+                <div class="container-fluid">
+                    <div class="page-header">
+                        <h1><i class="fas fa-users"></i> Gestion des Joueurs</h1>
+                        <div>
+                            <button class="btn btn-warning" id="reset-leaderboard">
+                                <i class="fas fa-redo"></i> Réinitialiser Classement
+                            </button>
+                            <button class="btn btn-success" id="export-players">
+                                <i class="fas fa-download"></i> Exporter CSV
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped" id="players-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Rang</th>
+                                            <th>Nom d'utilisateur</th>
+                                            <th>Score Total</th>
+                                            <th>Questions</th>
+                                            <th>% Réussite</th>
+                                            <th>Temps Moyen</th>
+                                            <th>Inscription</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="players-list">
+                                        <!-- Players list will be populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contests -->
+            <div id="contests-content" class="content-page">
+                <div class="container-fluid">
+                    <div class="page-header">
+                        <h1><i class="fas fa-trophy"></i> Gestion des Concours</h1>
+                        <button class="btn btn-primary" id="add-contest-btn">
+                            <i class="fas fa-plus"></i> Programmer un Concours
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Nom</th>
+                                            <th>Date/Heure</th>
+                                            <th>Statut</th>
+                                            <th>Limite</th>
+                                            <th>Prix</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="contests-list">
+                                        <!-- Contests list will be populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics -->
+            <div id="stats-content" class="content-page">
+                <div class="container-fluid">
+                    <div class="page-header">
+                        <h1><i class="fas fa-chart-line"></i> Statistiques Détaillées</h1>
+                        <button class="btn btn-success" id="export-stats">
+                            <i class="fas fa-download"></i> Exporter Données
+                        </button>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-lg-6 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Répartition par Sujet</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div style="position: relative; height: 300px;">
+                                        <canvas id="topics-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-6 mb-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>Évolution des Scores</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div style="position: relative; height: 300px;">
+                                        <canvas id="scores-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bot Simulator -->
+            <div id="bot-simulator-content" class="content-page">
+                <div class="container-fluid">
+                    <div class="page-header">
+                        <h1><i class="fab fa-telegram"></i> Simulateur Bot Telegram</h1>
+                        <p class="text-muted">Testez votre bot en conditions réelles</p>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <div class="card telegram-simulator">
+                                <div class="card-header bg-info text-white">
+                                    <h5><i class="fab fa-telegram"></i> Quiz Bot Simulator</h5>
+                                </div>
+                                <div class="card-body chat-area" id="chat-area">
+                                    <div class="welcome-message">
+                                        <p>Bienvenue dans le simulateur du bot Quiz Telegram !</p>
+                                        <p>Utilisez les commandes suivantes :</p>
+                                        <ul>
+                                            <li><code>/start</code> - Commencer</li>
+                                            <li><code>/quiz</code> - Lancer un quiz</li>
+                                            <li><code>/stats</code> - Voir vos statistiques</li>
+                                            <li><code>/leaderboard</code> - Voir le classement</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                                <div class="card-footer">
+                                    <div class="input-group">
+                                        <input type="text" class="form-control" id="bot-input" placeholder="Tapez votre commande...">
+                                        <button class="btn btn-primary" id="send-command">
+                                            <i class="fas fa-paper-plane"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>État du Quiz</h5>
+                                </div>
+                                <div class="card-body" id="quiz-state">
+                                    <div class="text-center text-muted">
+                                        Aucun quiz en cours
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- Add/Edit Quiz Modal -->
+    <div class="modal fade" id="quiz-modal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="quiz-modal-title">Ajouter un Quiz</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="quiz-form">
+                        <div class="mb-3">
+                            <label for="quiz-question" class="form-label">Question *</label>
+                            <textarea class="form-control" id="quiz-question" rows="3" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="quiz-topic" class="form-label">Sujet *</label>
+                            <input type="text" class="form-control" id="quiz-topic" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="quiz-difficulty" class="form-label">Difficulté *</label>
+                            <select class="form-control" id="quiz-difficulty" required>
+                                <option value="Facile">Facile</option>
+                                <option value="Moyen">Moyen</option>
+                                <option value="Difficile">Difficile</option>
+                            </select>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="quiz-choice1" class="form-label">Choix 1 *</label>
+                                <input type="text" class="form-control" id="quiz-choice1" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="quiz-choice2" class="form-label">Choix 2 *</label>
+                                <input type="text" class="form-control" id="quiz-choice2" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="quiz-choice3" class="form-label">Choix 3 *</label>
+                                <input type="text" class="form-control" id="quiz-choice3" required>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="quiz-choice4" class="form-label">Choix 4 *</label>
+                                <input type="text" class="form-control" id="quiz-choice4" required>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="quiz-correct" class="form-label">Réponse Correcte *</label>
+                            <select class="form-control" id="quiz-correct" required>
+                                <option value="0">Choix 1</option>
+                                <option value="1">Choix 2</option>
+                                <option value="2">Choix 3</option>
+                                <option value="3">Choix 4</option>
+                            </select>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="quiz-exam">
+                            <label class="form-check-label" for="quiz-exam">
+                                Question d'examen
+                            </label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-primary" id="save-quiz">Sauvegarder</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Contest Modal -->
+    <div class="modal fade" id="contest-modal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Programmer un Concours</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="contest-form">
+                        <div class="mb-3">
+                            <label for="contest-name" class="form-label">Nom du Concours *</label>
+                            <input type="text" class="form-control" id="contest-name" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="contest-date" class="form-label">Date et Heure *</label>
+                            <input type="datetime-local" class="form-control" id="contest-date" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="contest-limit" class="form-label">Limite de Participants</label>
+                            <input type="number" class="form-control" id="contest-limit" min="1" value="100">
+                        </div>
+                        <div class="mb-3">
+                            <label for="contest-prize" class="form-label">Prix/Récompense</label>
+                            <input type="text" class="form-control" id="contest-prize" placeholder="Ex: Badge spécial">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button>
+                    <button type="button" class="btn btn-primary" id="save-contest">Programmer</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
